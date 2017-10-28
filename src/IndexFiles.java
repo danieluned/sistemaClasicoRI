@@ -63,22 +63,18 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * Run it with no command-line arguments for usage information.
  */
 public class IndexFiles {
-  public static final String WEST = "west";
-  public static final String EAST = "east";
-  public static final String SOUTH = "south";
-  public static final String NORTH = "north";
   
   private IndexFiles() {}
 
   /** Index all text files under a directory. */
   public static void main(String[] args) {
-    String usage = "java org.apache.lucene.demo.IndexFiles"
-                 + " [-index INDEX_PATH] [-docs DOCS_PATH] [-update]\n\n"
-                 + "This indexes the documents in DOCS_PATH, creating a Lucene index"
-                 + "in INDEX_PATH that can be searched with SearchFiles";
-    String indexPath = "index";
+    String usage = "java IndexFiles"
+                 + " -index <indexPath> -docs <docsPath>\n\n"
+                 + "Esto indexa los documentos del directorio <docsPath> en el indice que se creara en <indexPath>.";
+    
+    String indexPath = null;
     String docsPath = null;
-    boolean create = true;
+
     for(int i=0;i<args.length;i++) {
       if ("-index".equals(args[i])) {
         indexPath = args[i+1];
@@ -86,13 +82,11 @@ public class IndexFiles {
       } else if ("-docs".equals(args[i])) {
         docsPath = args[i+1];
         i++;
-      } else if ("-update".equals(args[i])) {
-        create = false;
-      }
+      } 
     }
 
     if (docsPath == null) {
-      System.err.println("Usage: " + usage);
+      System.err.println("Uso: " + usage);
       System.exit(1);
     }
 
@@ -111,14 +105,11 @@ public class IndexFiles {
       Analyzer analyzer = new SpanishAnalyzer();
       IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
 
-      if (create) {
-        // Create a new index in the directory, removing any
-        // previously indexed documents:
-        iwc.setOpenMode(OpenMode.CREATE);
-      } else {
-        // Add new documents to an existing index:
-        iwc.setOpenMode(OpenMode.CREATE_OR_APPEND);
-      }
+     
+	    // Create a new index in the directory, removing any
+	    // previously indexed documents:
+	    iwc.setOpenMode(OpenMode.CREATE);
+     
 
       // Optional: for better indexing performance, if you
       // are indexing many documents, increase the RAM
@@ -136,7 +127,7 @@ public class IndexFiles {
       // worth it when your index is relatively static (ie
       // you're done adding documents to it):
       //
-      // writer.forceMerge(1);
+      writer.forceMerge(1);
 
       writer.close();
 
@@ -234,28 +225,12 @@ public class IndexFiles {
              InputSource is = new InputSource(fis2);
              org.w3c.dom.Document doc2 = builder.parse(is);
 
-             // obtener titulos
-             camposTextField(doc,doc2,"dc:title","title");
-             camposStringField(doc,doc2,"dc:identifier","identifier");
-             camposTextField(doc,doc2,"dc:subject","subject");
-             camposStringField(doc,doc2,"dc:type","type");
-             camposTextField(doc,doc2,"dc:description","description");
-             camposTextField(doc,doc2,"dc:creator","creator");
-             camposTextField(doc,doc2,"dc:publisher","publisher");
-             camposStringField(doc,doc2,"dc:format","format");
-             camposStringField(doc,doc2,"dc:language","language");
-            
-             // obtener westField, eastField, northFiel, southField
-             indexacionEspacial(doc, doc2);
-             
-             // crear indice temporal
+             //Crear indice temporal
              indexacionTemporal(doc,doc2);
              
-             // crear indice y consulta para periodos temporales
-             indexacionPeriodoTemporal(doc,doc2);
-            
+     
           } catch (Exception ex) {
-        	  System.out.println("Error al parsear el arbol Dom");
+        	  System.out.println("Error: Parsing tree dom.");
              ex.printStackTrace();
           }
           System.out.println("paso");
@@ -263,12 +238,6 @@ public class IndexFiles {
             // New index, so we just add the document (no old document can be there):
             System.out.println("adding " + file);
             writer.addDocument(doc);
-          } else {
-            // Existing index (an old copy of this document may have been indexed) so 
-            // we use updateDocument instead to replace the old one matching the exact 
-            // path, if present:
-            System.out.println("updating " + file);
-            writer.updateDocument(new Term("path", file.getPath()), doc);
           }
           
         } finally {
@@ -278,119 +247,15 @@ public class IndexFiles {
     }
   }
 
-	private static void indexacionPeriodoTemporal(Document doc, org.w3c.dom.Document doc2) {
-	// TODO Auto-generated method stub
-		NodeList nodos = doc2.getElementsByTagName("dcterms:temporal");
-		if (nodos.getLength() > 0){
-			if (!nodos.item(0).getTextContent().equals("None") ){
-				
-				String a[]= nodos.item(0).getTextContent().split(";");
-				if (a.length == 1){
-					String begin = a[0].replaceAll("-", "");
-					String end =  "20171024"; //Fecha actual
-					 Field pathField = new StringField("begin",begin, Field.Store.YES);
-			         doc.add(pathField);	
-			         System.out.println("begin: "+begin);
-			         Field pathField2 = new StringField("end",end, Field.Store.YES);
-			         doc.add(pathField2);	
-			         System.out.println("end: "+end);
-				}else{
-					
-				
-				String begin = a[0].split("=")[1].replaceAll("-", "");
-				String end =  a[1].split("=")[1].replaceAll("-", "");
-				 Field pathField = new StringField("begin",begin, Field.Store.YES);
-		         doc.add(pathField);	
-		         System.out.println("begin: "+begin);
-		         Field pathField2 = new StringField("end",end, Field.Store.YES);
-		         doc.add(pathField2);	
-		         System.out.println("end: "+end);
-				}
-			}
-			
-		}
-	}
 
 	private static void indexacionTemporal(Document doc, org.w3c.dom.Document doc2) {
-	// TODO Auto-generated method stub
-		NodeList nodos = doc2.getElementsByTagName("dcterms:created");
-		 if (nodos.getLength() > 0){
-			 
-			 String createdW3CDTF = nodos.item(0).getTextContent();
-			 String created = createdW3CDTF.replaceAll("-", "");
-			 Field pathField = new StringField("created",created, Field.Store.YES);
-	         doc.add(pathField);	
-	         System.out.println("created: "+created);
-		 }
-		 nodos = doc2.getElementsByTagName("dcterms:issued");
-		 if (nodos.getLength() > 0){
-			 
-			 String issuedW3CDTF = nodos.item(0).getTextContent();
-			 String issued = issuedW3CDTF.replaceAll("-", "");
-			 Field pathField = new StringField("issued",issued, Field.Store.YES);
-	         doc.add(pathField);	
-	         System.out.println("issued: "+issued);
-		 }
-	}
-
-	private static void indexacionEspacial(Document doc, org.w3c.dom.Document doc2) {
-		NodeList nodos = doc2.getElementsByTagName("ows:LowerCorner");
-		 if (nodos.getLength() > 0){
-			 
-			 String lowerCorner = nodos.item(0).getTextContent();
-			 String lowerCornercomma = lowerCorner.replace('.',',');
-			 Scanner scan = new Scanner(lowerCornercomma);
-			 if(scan.hasNextDouble()){
-				 Double west = scan.nextDouble();
-				 DoublePoint westField = new DoublePoint(WEST,west);
-				 doc.add(westField);
-				 System.out.println("west: "+west);
-			 }
-			 if(scan.hasNextDouble()){
-				 Double south = scan.nextDouble();
-				 DoublePoint southField = new DoublePoint(SOUTH,south);
-				 doc.add(southField);
-				 System.out.println("south: "+south);
-			 }
-			 scan.close();
-		 }
-		 nodos = doc2.getElementsByTagName("ows:UpperCorner");
-		 if (nodos.getLength() > 0){
-			 
-			 String upperCorner = nodos.item(0).getTextContent();
-			 String upperCornerComma = upperCorner.replace('.',',');
-			 Scanner scan = new Scanner(upperCornerComma);
-			 if(scan.hasNextDouble()){
-				 Double east =  scan.nextDouble();
-				 DoublePoint eastField = new DoublePoint(EAST,east);
-				 doc.add(eastField);
-				 System.out.println("east: "+east);
-			 }
-			 if(scan.hasNextDouble()){
-				 Double north =  scan.nextDouble();
-				 DoublePoint northField = new DoublePoint(NORTH,north);
-				 doc.add(northField);
-				 System.out.println("north: "+north);
-			 }
-			 scan.close();
-		 }
-	}
-
-	private static void camposStringField(Document doc, org.w3c.dom.Document doc2, String etiqueta, String campo) {
-		// TODO Auto-generated method stub
-		NodeList nodos = doc2.getElementsByTagName(etiqueta);
-		 for (int i = 0; i < nodos.getLength(); i++) {
-		     Field pathField = new StringField(campo,nodos.item(i).getTextContent(), Field.Store.YES);
-	         doc.add(pathField);
-		  }
-	}
 	
-	private static void camposTextField(Document doc, org.w3c.dom.Document doc2,String etiqueta,String campo) {
-		NodeList nodos = doc2.getElementsByTagName(etiqueta);
-		 for (int i = 0; i < nodos.getLength(); i++) {
-			 Reader inputString = new StringReader(nodos.item(i).getTextContent());
-		     doc.add(new TextField(campo,new BufferedReader(inputString)));
-		     
-		  }
+		NodeList nodos = doc2.getElementsByTagName("dc:date");
+		 if (nodos.getLength() > 0){
+			 String numberString = nodos.item(0).getTextContent();
+			 DoublePoint date = new DoublePoint("date", Double.valueOf(numberString));
+	         doc.add(date);	
+		 }
 	}
+
 }
