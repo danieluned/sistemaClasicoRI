@@ -18,8 +18,12 @@
  */
 
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.es.SpanishAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.standard.StandardTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.Field;
@@ -32,6 +36,7 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.Version;
 import org.xml.sax.InputSource;
 
 import java.io.BufferedReader;
@@ -101,14 +106,16 @@ public class IndexFiles {
       System.out.println("Indexing to directory '" + indexPath + "'...");
 
       Directory dir = FSDirectory.open(Paths.get(indexPath));
-     // Analyzer analyzer = new StandardAnalyzer();
-      Analyzer analyzer = new SpanishAnalyzer();
+
+      // Preparar el analizador a usar
+      Analyzer analyzer = new SpanishAnalyzer(StopWordsEs.lista());
+       
       IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
 
      
-	    // Create a new index in the directory, removing any
-	    // previously indexed documents:
-	    iwc.setOpenMode(OpenMode.CREATE);
+	 // Create a new index in the directory, removing any
+	 // previously indexed documents:
+	 iwc.setOpenMode(OpenMode.CREATE);
      
 
       // Optional: for better indexing performance, if you
@@ -239,7 +246,9 @@ public class IndexFiles {
 		NodeList nodos = doc2.getElementsByTagName("dc:date");
 		 if (nodos.getLength() > 0){
 			 String numberString = nodos.item(0).getTextContent();
+			 
 			 DoublePoint date = new DoublePoint("date", Double.valueOf(numberString));
+			 
 	         doc.add(date);	
 	       
 		 }

@@ -23,6 +23,8 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -30,13 +32,20 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.es.SpanishAnalyzer;
+
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BooleanQuery.Builder;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 import org.w3c.dom.Node;
@@ -106,7 +115,7 @@ public class SearchFiles {
     IndexSearcher searcher = new IndexSearcher(reader);
     
     //Preparar el analizador
-    Analyzer analyzer = new SpanishAnalyzer();
+    Analyzer analyzer = new SpanishAnalyzer(StopWordsEs.lista());
     QueryParser parser = new QueryParser("contents", analyzer);
     //Preparar el fichero de salida
     BufferedWriter bw = null;
@@ -117,10 +126,70 @@ public class SearchFiles {
     //Por cada necesidad:
     for (int i = 0; i<necesidades.length; i++){
     	//Pre-procesamiento 
-    	//Tokenizar, minusculas, lematizar y buscar
+    	// fechas
+    	Double fechaini = null;
+    	Double fechafin = null;
+    	String  exp= "a partir del [0-9]{4}";
+    	Pattern pattern = Pattern.compile(exp);
+    	Matcher m = pattern.matcher(necesidades[i]);
+    	if (m.find()){
+    		//Añadir query fecha de inicio
+    		String frase = m.group();
+    		fechaini = Double.valueOf(frase.substring(13));
+    	}
+    	
+    	exp = "hasta [0-9]{4}";
+    	pattern = Pattern.compile(exp);
+    	m = pattern.matcher(necesidades[i]);
+    	if (m.find()){
+    		//Añadir query fecha final
+    		String frase = m.group();
+    		fechafin = Double.valueOf(frase.substring(6));
+    	}
+    	
+    	exp = "[0-9]{4} y [0-9]{4}";
+    	pattern = Pattern.compile(exp);
+    	m = pattern.matcher(necesidades[i]);
+    	if(m.find()){
+    		//Añadir query con fecha inicial y final
+    		String frase = m.group();
+    		fechaini = Double.valueOf(frase.substring(0,4));
+    		fechafin = Double.valueOf(frase.substring(7));
+    	}
+    	//System.out.println("Fechaini: "+fechaini+" Fechafin: "+fechafin);
+    	//fechaini <= date 
+    	Query querydateIni = null;
+    	if (fechaini != null){
+    		querydateIni = DoublePoint.newRangeQuery("date", fechaini, Double.POSITIVE_INFINITY);
+    		
+    	}
+    	Query querydateFin = null;
+    	if (fechafin !=null){
+    		querydateFin = DoublePoint.newRangeQuery("date", Double.NEGATIVE_INFINITY,fechafin);
+    		
+    		
+    	}
+    	
+    	// tipos
     	
     	//obtener resultados en lista en el fichero correspondiente
-    	Query query = parser.parse(necesidades[i]);
+    	Query queryGeneral = parser.parse(necesidades[i]);
+    	
+    	//Mezclar queries con metodo booleano
+    	
+    	Builder builderquery = new BooleanQuery.Builder();
+    	
+    	builderquery.add(queryGeneral,BooleanClause.Occur.MUST);
+    	if (querydateIni != null){
+    		builderquery.add(querydateIni,BooleanClause.Occur.MUST);
+    	}
+    	if(querydateFin != null){
+    		builderquery.add(querydateFin,BooleanClause.Occur.MUST);
+    	}
+    	//Crear query
+    	BooleanQuery query = builderquery.build();
+    	
+    	//Buscar en el indice con la query obtenida 
     	TopDocs resultados = searcher.search(query,99999);
     	ScoreDoc[] hits = resultados.scoreDocs;
     	int numTotalHits = (int)resultados.totalHits;
