@@ -17,50 +17,33 @@
  * limitations under the License.
  */
 
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.es.SpanishAnalyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.analysis.standard.StandardTokenizer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.DoublePoint;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.LongPoint;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.util.Version;
-import org.xml.sax.InputSource;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Reader;
-import java.io.StringBufferInputStream;
 import java.io.StringReader;
 import java.nio.file.Paths;
 import java.util.Date;
-import java.util.Scanner;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.DoublePoint;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 /** Index all text files under a directory.
  * <p>
@@ -69,6 +52,32 @@ import javax.xml.parsers.DocumentBuilderFactory;
  */
 public class IndexFiles {
   
+	public static final String PATH = "path";
+	
+	public static final String CREATOR = "creator";
+	public static final String TITLE = "title";
+	public static final String IDENTIFIER = "identifier";
+	public static final String SUBJECT = "subject";
+	public static final String PUBLISHER = "publisher";
+	public static final String DATE = "date";
+	public static final String DESCRIPTION = "description";
+	public static final String FORMAT = "format";
+	public static final String LANGUAGE = "language";
+	public static final String TYPE = "type";
+	public static final String RIGHTS = "rights";
+	
+	public static final String CREATOR_DC = "dc:creator";
+	public static final String TITLE_DC = "dc:title";
+	public static final String IDENTIFIER_DC = "dc:identifier";
+	public static final String SUBJECT_DC = "dc:subject";
+	public static final String PUBLISHER_DC = "dc:publisher";
+	public static final String DATE_DC = "dc:date";
+	public static final String DESCRIPTION_DC = "dc:description";
+	public static final String FORMAT_DC = "dc:format";
+	public static final String LANGUAGE_DC = "dc:language";
+	public static final String TYPE_DC = "dc:type";
+	public static final String RIGHTS_DC = "dc:rights";
+	
   private IndexFiles() {}
 
   /** Index all text files under a directory. */
@@ -108,7 +117,7 @@ public class IndexFiles {
       Directory dir = FSDirectory.open(Paths.get(indexPath));
 
       // Preparar el analizador a usar
-      Analyzer analyzer = new SpanishAnalyzer(StopWordsEs.lista());
+      Analyzer analyzer = new StopAnalyzer(StopWordsEs.lista());
        
       IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
 
@@ -127,7 +136,7 @@ public class IndexFiles {
 
       IndexWriter writer = new IndexWriter(dir, iwc);
       indexDocs(writer, docDir);
-
+      
       // NOTE: if you want to maximize search performance,
       // you can optionally call forceMerge here.  This can be
       // a terribly costly operation, so generally it's only
@@ -186,40 +195,35 @@ public class IndexFiles {
         }
 
         try {
-
-          // make a new, empty document
-          Document doc = new Document();
-
-          // Add the path of the file as a field named "path".  Use a
-          // field that is indexed (i.e. searchable), but don't tokenize 
-          // the field into separate words and don't index term frequency
-          // or positional information:
-          Field pathField = new StringField("path", file.getName(), Field.Store.YES);
-          doc.add(pathField);
-
-                 
-          // Add the contents of the file to a field named "contents".  Specify a Reader,
-          // so that the text of the file is tokenized and indexed, but not stored.
-          // Note that FileReader expects the file to be in UTF-8 encoding.
-          // If that's not the case searching for special characters will fail.
-          doc.add(new TextField("contents", new BufferedReader(new InputStreamReader(fis, "UTF-8"))));
+        Document doc = new Document();
           
+          //Indice PATH
+          Field pathField = new StringField(PATH, file.getName(), Field.Store.YES);
+          doc.add(pathField);
           // Documentación del DocumentBuilder https://www.tutorialspoint.com/java/xml/javax_xml_parsers_documentbuilder_inputsource.htm
           // create a new DocumentBuilderFactory
           DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 
           try {
-             // use the factory to create a documentbuilder
+             // CREAR ARBOL DOM PARA EL DOCUMENTO
              DocumentBuilder builder = factory.newDocumentBuilder();
-
-             // create a new document from input source
              FileInputStream fis2;
              fis2 = new FileInputStream(file);
              InputSource is = new InputSource(fis2);
              org.w3c.dom.Document doc2 = builder.parse(is);
 
-             //Crear indice temporal
-             indexacionTemporal(doc,doc2);
+             //INDICES 
+             indexTextField(doc, doc2, CREATOR_DC,CREATOR);
+             indexTextField(doc,doc2, TITLE_DC,TITLE);
+             indexStringField(doc,doc2,IDENTIFIER_DC,IDENTIFIER,false);
+             indexTextField(doc,doc2,SUBJECT_DC,SUBJECT);
+             indexTextField(doc,doc2,PUBLISHER_DC,PUBLISHER);
+             indexNumberField(doc,doc2,DATE_DC,DATE);
+             indexTextField(doc,doc2,DESCRIPTION_DC,DESCRIPTION);
+             indexStringField(doc,doc2,FORMAT_DC,FORMAT,false);
+             indexStringField(doc,doc2,LANGUAGE_DC,LANGUAGE,false);
+             indexStringField(doc,doc2,TYPE_DC,TYPE,false);
+             indexStringField(doc,doc2,RIGHTS_DC,RIGHTS,false);
              
      
           } catch (Exception ex) {
@@ -240,30 +244,41 @@ public class IndexFiles {
     }
   }
 
+ 
 
-	private static void indexacionTemporal(Document doc, org.w3c.dom.Document doc2) {
-	
-		NodeList nodos = doc2.getElementsByTagName("dc:date");
-		 if (nodos.getLength() > 0){
-			 String numberString = nodos.item(0).getTextContent();
-			 
-			 DoublePoint date = new DoublePoint("date", Double.valueOf(numberString));
-			 
-	         doc.add(date);	
-	       
-		 }
+	private static void indexNumberField(Document doc, org.w3c.dom.Document doc2, String etiqueta, String campo) {
+		NodeList nodos = doc2.getElementsByTagName(etiqueta);
+		for(int i = 0; i < nodos.getLength(); i++){
+			String numberString = nodos.item(0).getTextContent();
+			DoublePoint date = new DoublePoint(campo, Double.valueOf(numberString));
+			doc.add(date);
+		}
 	}
 
-	private static void camposStringField(Document doc, org.w3c.dom.Document doc2, String etiqueta, String campo) {
+
+
+
+	private static void indexStringField(Document doc, org.w3c.dom.Document doc2, String etiqueta, String campo,boolean separarPorEspacios) {
 		// TODO Auto-generated method stub
 		NodeList nodos = doc2.getElementsByTagName(etiqueta);
+		 
 		 for (int i = 0; i < nodos.getLength(); i++) {
-		     Field pathField = new StringField(campo,nodos.item(i).getTextContent(), Field.Store.YES);
-	         doc.add(pathField);
+			 if (separarPorEspacios){
+				 String palabras[] = nodos.item(i).getTextContent().split(" ");
+				 for (int j = 0; j < palabras.length; j++) {
+					 Field pathField = new StringField(campo,palabras[j], Field.Store.YES);
+			         doc.add(pathField);
+				}
+				
+			 }else{
+				 Field pathField = new StringField(campo,nodos.item(i).getTextContent(), Field.Store.YES);
+		         doc.add(pathField);
+			 }
+		     
 		  }
 	}
 	
-	private static void camposTextField(Document doc, org.w3c.dom.Document doc2,String etiqueta,String campo) {
+	private static void indexTextField(Document doc, org.w3c.dom.Document doc2,String etiqueta,String campo) {
 		NodeList nodos = doc2.getElementsByTagName(etiqueta);
 		 for (int i = 0; i < nodos.getLength(); i++) {
 			 Reader inputString = new StringReader(nodos.item(i).getTextContent());
@@ -271,4 +286,17 @@ public class IndexFiles {
 		     
 		  }
 	}
+
+
+
+
+
+
+
+
+
+	
+	
+
+
 }

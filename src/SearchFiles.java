@@ -31,24 +31,23 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.es.SpanishAnalyzer;
-
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BooleanQuery.Builder;
+import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
-import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -56,6 +55,23 @@ import org.xml.sax.SAXException;
 /** Simple command-line based search demo. */
 public class SearchFiles {
 
+	// Aumentar la puntuación de un documento dependiendo de donde se haya encontrado la información
+	// cada asterisco representa mayor importancia
+	static final float CREATOR_BOOST = 3.5f;					
+	static final float TITLE_BOOST = 2.5f;				
+	static final float IDENTIFIER_BOOST = 1.9f;			
+	static final float SUBJECT_BOOST = 2.6f;			
+	static final float PUBLISHER_BOOST = 1.1f;						
+	static final float DESCRIPTION_BOOST = 1.2f;		
+	static final float FORMAT_BOOST = 1.0f;				
+	static final float LANGUAGE_BOOST = 1.0f;			
+	static final float TYPE_BOOST = 1.0f;				
+	static final float RIGHTS_BOOST = 1.0f;				
+	
+	// Date
+	static final float DATE_MIN = 1.2f;					
+	static final float DATE_MAX = 1.2f;					
+	
   private SearchFiles() {}
 
   /** Simple command-line based search demo. */
@@ -114,9 +130,11 @@ public class SearchFiles {
     IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index)));
     IndexSearcher searcher = new IndexSearcher(reader);
     
-    //Preparar el analizador
-    Analyzer analyzer = new SpanishAnalyzer(StopWordsEs.lista());
-    QueryParser parser = new QueryParser("contents", analyzer);
+    //Preparar el analizador para los textos
+    Analyzer stopAnalyzer = new StopAnalyzer(StopWordsEs.lista());
+    //Analizar basico para los campos simples
+    Analyzer whiteSpaceAnalyzer = new WhitespaceAnalyzer();
+    
     //Preparar el fichero de salida
     BufferedWriter bw = null;
     FileWriter fw = null;
@@ -125,14 +143,38 @@ public class SearchFiles {
     
     //Por cada necesidad:
     for (int i = 0; i<necesidades.length; i++){
-    	//Pre-procesamiento 
-    	// fechas
+    	
+    	
+    	// Creator	(text)
+    	BoostQuery creator 		= boostQuery(necesidades[i],IndexFiles.CREATOR,CREATOR_BOOST, stopAnalyzer);
+    	// Title	(text)
+    	BoostQuery title 		= boostQuery(necesidades[i],IndexFiles.TITLE,TITLE_BOOST, stopAnalyzer);
+        // identifier  (String)
+    	BoostQuery identifier 	= boostQuery(necesidades[i],IndexFiles.IDENTIFIER,IDENTIFIER_BOOST, whiteSpaceAnalyzer);
+    	// subject (String)
+    	BoostQuery subject 		= boostQuery(necesidades[i],IndexFiles.SUBJECT,SUBJECT_BOOST, stopAnalyzer);
+    	// publisher
+    	BoostQuery publisher 	= boostQuery(necesidades[i],IndexFiles.PUBLISHER,PUBLISHER_BOOST, stopAnalyzer);
+    	// description
+    	BoostQuery description 	= boostQuery(necesidades[i],IndexFiles.DESCRIPTION,DESCRIPTION_BOOST, stopAnalyzer);
+    	// format	
+    	BoostQuery format		 = boostQuery(necesidades[i],IndexFiles.FORMAT,FORMAT_BOOST, whiteSpaceAnalyzer);
+    	// language
+    	BoostQuery language		 = boostQuery(necesidades[i],IndexFiles.LANGUAGE,LANGUAGE_BOOST, whiteSpaceAnalyzer);
+    	// type 
+    	BoostQuery type			 = boostQuery(necesidades[i],IndexFiles.TYPE,TYPE_BOOST, whiteSpaceAnalyzer);
+    	// rights
+    	BoostQuery rights		 = boostQuery(necesidades[i],IndexFiles.RIGHTS,RIGHTS_BOOST, whiteSpaceAnalyzer);
+    	
+ 
+    	//IDENTIFICAR SI SE ESTA EXPRESANDO UNA FECHA RESTRICTIVA
     	Double fechaini = null;
     	Double fechafin = null;
     	String  exp= "a partir del [0-9]{4}";
     	Pattern pattern = Pattern.compile(exp);
     	Matcher m = pattern.matcher(necesidades[i]);
     	if (m.find()){
+    		
     		//Añadir query fecha de inicio
     		String frase = m.group();
     		fechaini = Double.valueOf(frase.substring(13));
@@ -159,35 +201,68 @@ public class SearchFiles {
     	//System.out.println("Fechaini: "+fechaini+" Fechafin: "+fechafin);
     	//fechaini <= date 
     	Query querydateIni = null;
+    	BoostQuery boostdateIni = null;
     	if (fechaini != null){
-    		querydateIni = DoublePoint.newRangeQuery("date", fechaini, Double.POSITIVE_INFINITY);
-    		
+    		querydateIni = DoublePoint.newRangeQuery(IndexFiles.DATE, fechaini, Double.POSITIVE_INFINITY);
+    		boostdateIni = new BoostQuery(querydateIni,2.0f);
     	}
     	Query querydateFin = null;
+    	BoostQuery boostdateFin = null;
     	if (fechafin !=null){
-    		querydateFin = DoublePoint.newRangeQuery("date", Double.NEGATIVE_INFINITY,fechafin);
-    		
+    		querydateFin = DoublePoint.newRangeQuery(IndexFiles.DATE, Double.NEGATIVE_INFINITY,fechafin);
+    		boostdateFin = new BoostQuery(querydateFin,2.0f);
     		
     	}
-    	
-    	// tipos
-    	
-    	//obtener resultados en lista en el fichero correspondiente
-    	Query queryGeneral = parser.parse(necesidades[i]);
-    	
+    	  	   	
     	//Mezclar queries con metodo booleano
+    	Builder builderobli = new BooleanQuery.Builder();
+    	//OBLIGATORIAS EN ALGUNA DE ESTAS
     	
+    	//title			
+    	builderobli.add(title,BooleanClause.Occur.SHOULD);
+    	
+    	//description
+    	builderobli.add(description,BooleanClause.Occur.SHOULD);
+    	///subject
+    	builderobli.add(subject,BooleanClause.Occur.SHOULD);
+    	
+    	
+    	
+    	//creacion de la consulta obligatoria
+    	BooleanQuery obligatorias = builderobli.build();
     	Builder builderquery = new BooleanQuery.Builder();
+    	builderquery.add(obligatorias,BooleanClause.Occur.MUST);
     	
-    	builderquery.add(queryGeneral,BooleanClause.Occur.MUST);
-    	if (querydateIni != null){
-    		builderquery.add(querydateIni,BooleanClause.Occur.MUST);
+    	//OPCIONAL EN LAS SIGUIENTES
+    	
+    	//identifier
+    	builderquery.add(identifier,BooleanClause.Occur.SHOULD);
+    	//creator
+    	builderquery.add(creator,BooleanClause.Occur.SHOULD);
+    	//publisher
+    	builderquery.add(publisher,BooleanClause.Occur.SHOULD);
+    	//format
+    	builderquery.add(format,BooleanClause.Occur.SHOULD);
+    	//language
+    	builderquery.add(language,BooleanClause.Occur.SHOULD);
+    	//type
+    	builderquery.add(type,BooleanClause.Occur.SHOULD);
+    	//rights
+    	builderquery.add(rights,BooleanClause.Occur.SHOULD);
+    	
+    	// date
+    	if (boostdateIni != null){
+    		builderquery.add(boostdateIni,BooleanClause.Occur.SHOULD);
     	}
-    	if(querydateFin != null){
-    		builderquery.add(querydateFin,BooleanClause.Occur.MUST);
+    	if(boostdateFin != null){
+    		builderquery.add(boostdateFin,BooleanClause.Occur.SHOULD);
     	}
+    	
     	//Crear query
     	BooleanQuery query = builderquery.build();
+    	
+    	//Combinar
+    	
     	
     	//Buscar en el indice con la query obtenida 
     	TopDocs resultados = searcher.search(query,99999);
@@ -215,6 +290,12 @@ public class SearchFiles {
     }
     reader.close();
   }
+
+private static BoostQuery boostQuery(String necesidad,String campo ,float boost,Analyzer analyzer) throws ParseException {
+	QueryParser qparser = new QueryParser(campo, analyzer);
+	Query qqcreator = qparser.parse(necesidad);
+	return new BoostQuery(qqcreator,boost);
+}
 
   private static int numNeeds(File infoNeedsFile){
 	  DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

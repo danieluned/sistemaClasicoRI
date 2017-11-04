@@ -6,16 +6,14 @@ public class StopWordsEs {
 	
 	public static CharArraySet lista(){
 		ArrayList<String> p = new ArrayList<String>();
-		p.add("0");
-		p.add("1");
-		p.add("2");
-		p.add("3");
-		p.add("4");
-		p.add("5");
-		p.add("6");
-		p.add("7");
-		p.add("8");
-		p.add("9");
+		for (int i = 0; i< 2999;i++){
+			p.add(String.valueOf(i));
+		}
+		p.add("interesados");
+		p.add("información");
+		p.add("sistema");
+		p.add("estudios");
+		
 		p.add("_");
 		p.add("a");
 		p.add("actualmente");
@@ -738,6 +736,8 @@ public class StopWordsEs {
 		p.add("últimas");
 		p.add("último");
 		p.add("últimos");
+		
+		
 		CharArraySet l = new CharArraySet(p,true);
 		return l;
 	}
